@@ -5,8 +5,8 @@ const log = console.log;
  * 명령형 코드
  */
 // 리스트에서 홀수를 length 만큼 봅아서 제곱한 후 모두 더하기
-function fForLoop(iter, length) {
-  log(iter);
+function fForLoop(list, length) {
+  //
 }
 
 function mainForLoop() {
@@ -21,7 +21,6 @@ mainForLoop();
  * *************************************
  * 함수형 코드
  */
-
 function mainFp() {
   //
 }
