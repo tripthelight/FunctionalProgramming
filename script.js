@@ -34,21 +34,23 @@ const L = {};
 L.range = function* (stop) {
   let i = -1;
   while(++i < stop) yield i;
-}
+};
 
 const curry = (f) => (a, ...bs) => bs.length ? f(a, ...bs) : (...bs) => f(a, ...bs);
+const go1 = (a, f) => a instanceof Promise ? a.then(f) : f(a);
+const go = (...fs) => reduce(go1, fs);
 
 L.filter = curry(function* (f, iter) {
   for (const a of iter) {
     if (f(a)) yield a;
   }
-})
+});
 
 L.map = curry(function* (f, iter) {
   for (const a of iter) {
     yield f(a);
   }
-})
+});
 
 const take = curry(function (length, iter) {
   let res = [];
@@ -57,7 +59,32 @@ const take = curry(function (length, iter) {
     if (res.length == length) return res;
   }
   return res;
-})
+});
+
+const takeWhile = curry(function (f, iter) {
+  iter = iter[Symbol.iterator]();
+  iter.return = null;
+  let res = [];
+  return function recur () {
+    for (const a of iter) {
+      const b = go1(a, f);
+      if (!b) return res;
+      if (b instanceof Promise) return b.then(
+        async b => b ? (res.push(await a), recur()) : res);
+      res.push(a);
+    }
+    return res;
+  }();
+});
+
+// log(takeWhile(a => a < 5, [1, 2, 3, 4, 5]));
+// takeWhile(a => a < 5,
+//   [
+//     Promise.resolve(1),
+//     Promise.resolve(2),
+//     Promise.resolve(3)
+//   ]
+// ).then(log);
 
 const reduce = curry(function (f, acc, iter) {
   if (arguments.length == 2) {
@@ -68,7 +95,7 @@ const reduce = curry(function (f, acc, iter) {
     acc = f(acc, a);
   }
   return acc;
-})
+});
 
 const add = curry((a, b) => a + b);
 
@@ -76,9 +103,6 @@ const add = curry((a, b) => a + b);
 // log(reduce(add, 10, [10, 20, 30]));
 // log(reduce(add, [10, 20, 30]));
 // log(' ///////////////////////////// ');
-
-const go1 = (a, f) => a instanceof Promise ? a.then(f) : f(a);
-const go = (...fs) => reduce(go1, fs);
 
 // log(' ///////////////////////////// ');
 // go(10, a => a + 10, a => a + 1, log);
@@ -124,14 +148,14 @@ L.flat = function* (iter) {
   }
 }
 
-go(arr,
-  L.flat,
-  L.filter(a => a % 2),
-  L.map(a => a * a),
-  take(3),
-  reduce(add),
-  log
-);
+// go(arr,
+//   L.flat,
+//   L.filter(a => a % 2),
+//   L.map(a => a * a),
+//   take(3),
+//   reduce(add),
+//   log
+// );
 
 /**
  * *************************************
@@ -162,15 +186,15 @@ const users = [
   ] },
 ];
 
-go(users,
-  L.map(u => u.family),
-  L.flat,
-  L.filter(u => u.age < 20),
-  L.map(u => u.age),
-  take(2),
-  reduce(add),
-  log,
-);
+// go(users,
+//   L.map(u => u.family),
+//   L.flat,
+//   L.filter(u => u.age < 20),
+//   L.map(u => u.age),
+//   take(2),
+//   reduce(add),
+//   log,
+// );
 
 /**
  * *************************************
@@ -191,22 +215,17 @@ const fg = x => Promise.resolve(x)
  * *************************************
  * 일급, Promise, go1
  */
-console.clear();
 // delay
 const delay = (time, a) => new Promise(resolve => 
   setTimeout(() => resolve(a), time));
 
 // delay(100, 5).then(log);
 
-// go1
-
-
 const a = 10;
 const b = delay(1000, 5);
 
 // go1(a, log);
 // go1(b, log);
-
 
 async function af() {
   const b = await go(Promise.resolve(2000),
@@ -221,4 +240,57 @@ async function af() {
 
   log(b, c);
 }
-af();
+// af();
+
+/**
+ * *************************************
+ * 아임포트 결제 누락 싱크
+ */
+// console.clear();
+const Impt = {
+  payments: {
+    0: [{ iid: 11, oid: 1 }, { iid: 12, oid: 2 }, { iid: 13, oid: 3 }],
+    1: [{ iid: 14, oid: 4 }, { iid: 15, oid: 5 }, { iid: 16, oid: 6 }],
+    2: [{ iid: 17, oid: 7 }, { iid: 18, oid: 8 }],
+    3: [],
+    4: [],
+    // ...
+  },
+  getPayments: page => {
+    console.log(`http://..?page=${page}`);
+    return delay(Math.floor(Math.random() * (3000 - 2000 + 1)) + 2000, Impt.payments[page]);
+  },
+  cancelPayments: paymentId => Promise.resolve(`${paymentId}: 취소완료`)
+};
+
+const getOrders = ids => delay(100, [{ id: 1 }, { id: 3 },{ id: 7 }]);
+
+async function job() {
+  const payments = await go(L.range(Infinity),
+    L.map(Impt.getPayments),
+    takeWhile(ps => ps.length),
+    L.flat,
+    take(Infinity));
+
+  const orderIds = await go(payments,
+    L.map(p => p.oid),
+    take(Infinity),
+    getOrders,
+    L.map(o => o.id),
+    take(Infinity));
+
+  return Promise.all(go(payments,
+    L.filter(p => !orderIds.includes(p.oid)),
+    L.map(p => p.iid),
+    take(Infinity),
+    L.map(Impt.cancelPayments),
+    take(Infinity)));
+}
+
+async function recur() {
+  return Promise.all([
+    delay(1000 * 3),
+    job().then(log)
+  ]).then(recur);
+};
+recur();
