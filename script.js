@@ -77,7 +77,8 @@ const add = curry((a, b) => a + b);
 // log(reduce(add, [10, 20, 30]));
 // log(' ///////////////////////////// ');
 
-const go = (...fs) => reduce((a, f) => f(a), fs);
+const go1 = (a, f) => a instanceof Promise ? a.then(f) : f(a);
+const go = (...fs) => reduce(go1, fs);
 
 // log(' ///////////////////////////// ');
 // go(10, a => a + 10, a => a + 1, log);
@@ -170,4 +171,54 @@ go(users,
   reduce(add),
   log,
 );
+
+/**
+ * *************************************
+ * Kleisli Composition, Promise
+  - f(g(x)) = g(x)
+ */
+const g = JSON.parse;
+const f = ({k}) => k;
+
+const fg = x => Promise.resolve(x)
+  .then(g)
+  .then(f);
+
+// fg('{"k" : 10}').then(log);
+// fg('{"k : 10}').catch(_ => '미안..').then(log);
+
+/**
+ * *************************************
+ * 일급, Promise, go1
+ */
 console.clear();
+// delay
+const delay = (time, a) => new Promise(resolve => 
+  setTimeout(() => resolve(a), time));
+
+// delay(100, 5).then(log);
+
+// go1
+
+
+const a = 10;
+const b = delay(1000, 5);
+
+// go1(a, log);
+// go1(b, log);
+
+
+async function af() {
+  const b = await go(Promise.resolve(2000),
+    a => a + 100,
+    a => delay(1000, a + 1000),
+    a => delay(1000, a + 1000));
+  
+  const c = await go(Promise.resolve(2000),
+    a => a + 100,
+    a => delay(1000, a + 1000),
+    a => delay(1000, a + 1000));
+
+  log(b, c);
+}
+af();
