@@ -6,9 +6,15 @@ const log = console.log;
  */
 // 리스트에서 홀수를 length 만큼 뽑아서 제곱한 후 모두 더하기
 function fForLoop(list, length) {
+  let i = 0;
+  let res = 0;
   for (const a of list) {
-    log(a);
+    if (a % 2) {
+      res = res + a * a;
+      if (++i == length) break;
+    }
   }
+  log(res);
 }
 
 function mainForLoop() {
@@ -17,15 +23,266 @@ function mainForLoop() {
   fForLoop([1, 2, 3, 4, 5], 3);
 }
 
-mainForLoop();
+// mainForLoop();
 
 /**
  * *************************************
  * 함수형 코드
  */
+const L = {};
+
+L.range = function* (stop) {
+  let i = -1;
+  while (++i < stop) yield i;
+}
+
+const curry = (f) => (a, ...bs) => bs.length ? f(a, ...bs) : (...bs) => f(a, ...bs);
+// go1
+const go1 = (a, f) => a instanceof Promise ? a.then(f) : f(a);
+const go = (...as) => reduce(go1, as);
+const add = curry((a, b) => a + b);
+
+L.filter = curry(function* (f, iter) {
+  for (const a of iter) {
+    if (f(a)) yield a;
+  }
+});
+
+L.map = curry(function* (f, iter) {
+  for (const a of iter) {
+    yield f(a);
+  }
+});
+
+const take = curry(function (length, iter) {
+  let res = [];
+  for (const a of iter) {
+    res.push(a);
+    if (res.length == length) return res;
+  }
+  return res;
+});
+
+const takeWhile = curry(function (f, iter) {
+  iter = iter[Symbol.iterator]();
+  iter.return = null;
+  let res = [];
+  return function recur () {
+    for (const a of iter) {
+      const b = go1(a, f);
+      if (!b) return res;
+      if (b instanceof Promise) return b.then(
+        async b => b ? (res.push(await a), recur()) : res);
+      res.push(a);
+    }
+    return res;
+  }();
+});
+
+/*
+log(takeWhile(a => a < 5, [1, 2, 3, 4, 5]));
+takeWhile(a => a < 5, [
+  Promise.resolve(1),
+  Promise.resolve(2),
+  Promise.resolve(3)
+]).then(log);
+*/
+
+const reduce = curry(function (f, acc, iter) {
+  if (arguments.length == 2) {
+    iter = acc[Symbol.iterator]();
+    acc = iter.next().value;
+  }
+  for (const a of iter) {
+    acc = f(acc, a);
+  }
+  return acc;
+});
+
+const fFp = (list, length) =>
+  reduce(add, 0,
+    take(length,
+      L.map(a => a * a,
+        L.filter(a => a % 2, list))));
+
+const fGo = (list, length) => go(
+  list,
+  L.filter(a => a % 2),
+  L.map(a => a * a),
+  take(length),
+  reduce(add));
 
 function mainFp() {
-
+  log(fGo([1, 2, 3, 4, 5], 1));
+  log(fGo([1, 2, 3, 4, 5], 2));
+  log(fGo([1, 2, 3, 4, 5], 3));
+  log(fGo(L.range(Infinity), 3));
 };
 
-mainFp();
+// mainFp();
+
+/**
+ * *************************************
+ * 2차원 배열
+ */
+const arr = [
+  [1, 2],
+  3, 4, 5,
+  [6, 7, 8],
+  [9, 10]
+];
+
+L.flat = function* (iter) {
+  for (const a of iter) {
+    if (a && a[Symbol.iterator]) yield* a
+    else yield a;
+  }
+};
+
+/*
+go(arr,
+  L.flat,
+  L.filter(a => a % 2),
+  L.map(a => a * a),
+  take(2),
+  reduce(add),
+  log
+);
+*/
+
+/**
+ * *************************************
+ * 유저 목록
+ */
+const users = [
+  { name: 'a', age: 21, family: [
+    { name: 'a1', age: 53 },
+    { name: 'a2', age: 47 },
+    { name: 'a3', age: 16 },
+    { name: 'a4', age: 14 },
+  ] },
+  { name: 'b', age: 24, family: [
+    { name: 'b1', age: 58 },
+    { name: 'b2', age: 51 },
+    { name: 'b3', age: 10 },
+    { name: 'b4', age: 22 },
+  ] },
+  { name: 'c', age: 31, family: [
+    { name: 'c1', age: 64 },
+    { name: 'c2', age: 62 },
+  ] },
+  { name: 'd', age: 20, family: [
+    { name: 'd1', age: 42 },
+    { name: 'd2', age: 42 },
+    { name: 'd3', age: 11 },
+    { name: 'd4', age: 7 },
+  ] },
+];
+
+/*
+go(users,
+  L.map(u => u.family),
+  L.flat,
+  L.filter(u => u.age < 20),
+  L.map(u => u.age),
+  take(2),
+  reduce(add),
+  log
+);
+*/
+
+/**
+ * *************************************
+ * Kleisli Composition, Promise
+  - f(g(x)) = g(x)
+ */
+const g = JSON.parse;
+const f = ({k}) => k;
+
+const fg = x => Promise.resolve(x)
+  .then(g)
+  .then(f);
+
+  /*
+fg('{ "k": 10 }').then(log);
+fg('{ "k: 10 }').catch(_ => '미안...').then(log);
+*/
+
+/**
+ * *************************************
+ * 일급, Promise, go1
+ */
+// delay
+const delay = (time, a) => new Promise((resolve) =>
+  setTimeout(() => resolve(a), time));
+
+// const a = 10;
+// const b = delay(1000, 5);
+// go1(a, log);
+// go1(b, log);
+
+async function af () {
+  const b = await go(Promise.resolve(1_000),
+    a => a + 1,
+    a => delay(1_000, a + 1_000),
+    a => delay(1_000, a + 1_000));
+  const c = await go(Promise.resolve(1_000),
+    a => a + 1,
+    a => delay(1_000, a + 1_000),
+    a => delay(1_000, a + 1_000));
+
+  log(b, c);
+};
+// af();
+
+/**
+ * *************************************
+ * 아임포트 결제 누락 싱크
+ */
+const Impt = {
+  payments: {
+    0: [{ iid: 11, oid: 1 }, { iid: 12, oid: 2 }, { iid: 13, oid: 3 }],
+    1: [{ iid: 14, oid: 4 }, { iid: 15, oid: 5 }, { iid: 16, oid: 6 }],
+    2: [{ iid: 17, oid: 7 }, { iid: 18, oid: 8 }],
+    3: [],
+    4: [],
+    // ...
+  },
+  getPayments: page => {
+    console.log(`http://..?page=${page}`);
+    return delay(Math.floor(Math.random() * (3000 - 2000 + 1)) + 2000, Impt.payments[page]);
+  },
+  cancelPayment: paymentId => Promise.resolve(`${paymentId}: 취소 완료`)
+};
+
+const getOrders = ids => delay(Math.floor(Math.random() * (3000 - 2000 + 1)) + 2000, [{ id: 1 }, { id: 3 }, { id: 7 }]);
+
+async function job() {
+  const payments = await go(L.range(Infinity),
+    L.map(Impt.getPayments),
+    takeWhile(ps => ps.length),
+    L.flat,
+    take(Infinity));
+
+  const orderIds = await go(payments,
+    L.map(p => p.oid),
+    take(Infinity),
+    getOrders,
+    L.map(o => o.id),
+    take(Infinity));
+
+  return Promise.all(go(payments,
+    L.filter(p => !orderIds.includes(p.oid)),
+    L.map(p => p.iid),
+    take(Infinity),
+    L.map(Impt.cancelPayment),
+    take(Infinity)))
+};
+
+async function recur() {
+  return Promise.all([
+    delay(1000 * 3),
+    job().then(log)
+  ]).then(recur);
+};
+recur();
