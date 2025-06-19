@@ -4,9 +4,11 @@ const log = console.log;
  * *************************************
  * 명령형 코드
  */
-// 리스트에서 홀수를 length 만큼 봅아서 제곱한 후 모두 더하기
+// 리스트에서 홀수를 length 만큼 뽑아서 제곱한 후 모두 더하기
 function fForLoop(list, length) {
-  log(list);
+  for (const a of list) {
+    log(a);
+  }
 }
 
 function mainForLoop() {
