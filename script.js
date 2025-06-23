@@ -72,3 +72,4 @@ const getOrders = ids => delay(100, [{ id: 1 }, { id: 3 }, { id: 7 }]);
 async function job() {
 
 }
+job();
