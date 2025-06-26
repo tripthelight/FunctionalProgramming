@@ -15,7 +15,7 @@ function mainForLoop() {
   fForLoop([1, 2, 3, 4, 5], 3);
 };
 
-mainForLoop();
+// mainForLoop();
 
 /**
  * *************************************
