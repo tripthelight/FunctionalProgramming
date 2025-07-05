@@ -1,3 +1,8 @@
+// ******************************************************
+// 나는 현재 promise, async, await에 대한 기초가 부족하다..
+// 그에 맞게 단계별로 문제를 풀어 볼 필요가 있다.
+// ******************************************************
+
 /**
  * 문제 6-2: lazyMapAsync 구현하기
   - lazyMapAsync(f, asyncIterable) 를 구현하세요
@@ -11,12 +16,15 @@ async function q_6_2 () {
     yield Promise.resolve(2);
     yield Promise.resolve(3);
   };
+
   const doubleAsync = async x => x * 2;
+
   async function* lazyMapAsync (f, asyncIterable) {
     for await (const a of asyncIterable) {
       yield f(a);
     }
   }
+
   for await (const val of lazyMapAsync(doubleAsync, source())) {
     console.log(val); // 2, 4, 6
   }
@@ -52,7 +60,7 @@ async function q_6_3 () {
     console.log(val); // 2, 4, 6, 8, 10
   }
 }
-q_6_3();
+// q_6_3();
 
 /**
  * 문제 6-4: takeAsync 구현하기
@@ -80,7 +88,7 @@ async function q_6_4 () {
 
   takeAsync(2, source()).then(console.log); // [1, 2]
 }
-q_6_4();
+// q_6_4();
 
 /**
  * 문제 6-5: pipeAsyncIter 구현하기
@@ -122,4 +130,23 @@ async function q_6_5 () {
     console.log(val); // 20, 40
   }
 };
-q_6_5();
+// q_6_5();
+
+// 함수에 async를 붙이니까 Promise를 return  하네???
+async function pr (x) {
+  return x * x;
+};
+
+// pr(2).then(console.log);
+
+
+const asyncIter = {
+  async *[Symbol.asyncIterator]() {
+    yield 1;
+    yield 2;
+  }
+};
+
+for await (const item of asyncIter) {
+  // console.log('item : ', item);
+}
