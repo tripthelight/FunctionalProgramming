@@ -1,5 +1,6 @@
 // ******************************************************
 // 나는 지금 Date 처리가 약하다
+// 클로져는 더 약하다 - 클로져로 구성된 코드를 전혀 분석하지 못한다.
 // ******************************************************
 
 /**
@@ -23,6 +24,8 @@ async function* throttleAsync (ms, asyncIterable) {
   for await (const val of asyncIterable) {
     const now = Date.now();
     const elapsed = now - lastTime;
+    console.log(' ==== ', elapsed);
+    
 
     if (elapsed < ms) {
       await new Promise(resolve => setTimeout(resolve, ms - elapsed));
