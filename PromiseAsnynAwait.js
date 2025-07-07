@@ -1,74 +1,14 @@
 // ******************************************************
 // 나는 지금 Date 처리가 약하다
+// 에러 핸들링도 약하다
 // 클로져는 더 약하다 - 클로져로 구성된 코드를 전혀 분석하지 못한다.
 // ******************************************************
 
-/**
- * 고급 문제 8: throttleAsync 구현하기
-  - async iterable을 받아서,
-  - 지정한 시간(ms) 간격마다 1개씩만 값을 통과시키는 throttleAsync 함수를 구현하세요.
- */
-function delay(val, ms) {
-  return new Promise(resolve => setTimeout(() => resolve(val), ms));
-}
+// 요청이 OK가 아닐 시, 추가적으로 요청을 더 시킬 수 있다. - retryAsync
+// 요청이 OK가 아닐 시, 추가적으로 더 요청을 보낼 때 time^n 만큼 축척된 delay를 줄 수 있다. - retryAsync에 backoff 기능 추가
+// 요청 시작 후, 요청 대기 시간을 미리 정해서, 그 시간안에 응답이 오지 않으면 중지 시킬 수 있다. - AbortController
 
-async function* asyncGenerator() {
-  for (let i = 1; i <= 5; i++) {
-    yield await delay(i, 100); // 100ms 간격 생성
-  }
-}
-// 이걸 구현하세요
-async function* throttleAsync (ms, asyncIterable) {
-  let lastTime = 0;
+const url = 'https://jsonplaceholder.typicode.com/posts/1';
+const url404 = 'https://jsonplaceholder.typicode.com/postss/1';
+const urlBad = 'https://dddjsonplaceholder.typicode.com/posts/1';
 
-  for await (const val of asyncIterable) {
-    const now = Date.now();
-    const elapsed = now - lastTime;
-    console.log(' ==== ', elapsed);
-    
-
-    if (elapsed < ms) {
-      await new Promise(resolve => setTimeout(resolve, ms - elapsed));
-    };
-
-    yield val;
-
-    lastTime = Date.now();
-  }
-};
-
-// 사용 예시
-async function run() {
-  const throttled = throttleAsync(300, asyncGenerator());
-
-  const start = Date.now();
-  for await (const val of throttled) {
-    const elapsed = Date.now() - start;
-    console.log(`[+${elapsed}ms]`, val);
-    // 출력 예시:
-    // [+103ms] 1
-    // [+409ms] 2
-    // [+713ms] 3
-    // [+1018ms] 4
-    // [+1322ms] 5
-  }
-}
-run();
-
-async function runTimeEnd() {
-  for await (const val of asyncGenerator()) {
-    console.time('val');
-    console.log(val);
-    console.timeEnd('val');
-  }
-}
-// runTimeEnd();
-async function runDateNow() {
-  let prev = Date.now();
-  for await (const val of asyncGenerator()) {
-    const now = Date.now();
-    console.log(`[+${now - prev}ms]`, val);
-    prev = now;
-  }
-}
-// runDateNow();
