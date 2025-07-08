@@ -17,3 +17,14 @@
 // 2. 큐처리기에 비동기 데이터 흐름 처리를 감싸서 사용 가능 
 // - queue.enqueue(() => runPipeOverData(asyncDataSource)); 
 // 큐처리기에 비동기 pipe를 함께 사용하는 기능 ***************** 이거도 풀어보자!
+
+const url = 'https://jsonplaceholder.typicode.com/posts/1';
+const url404 = 'https://jsonplaceholder.typicode.com/postss/1';
+const urlBad = 'https://dddjsonplaceholder.typicode.com/postss/1';
+
+
+
+
+
+
+
