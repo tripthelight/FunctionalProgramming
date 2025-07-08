@@ -10,5 +10,7 @@
 // 요청 시작 후, 요청 대기 시간과 재요청 회수를 미리 정해서, 미리 설정한 대기시간보다 재요청 시간이 길어질 경우 중지 시킬 수 있다.
 // 큐처리기를 이용해서 동기, 비동기 함수들의 순서를 강제할 수 있다.
 
-
+const url = 'https://jsonplaceholder.typicode.com/posts/1';
+const url404 = 'https://jsonplaceholder.typicode.com/postss/1';
+const urlBad = 'https://dddjsonplaceholder.typicode.com/posts/1';
 
