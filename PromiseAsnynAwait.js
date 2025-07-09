@@ -13,7 +13,7 @@ const urlBad = 'https://dddjsonplaceholder.typicode.com/postss/1';
 // 요청 시작 후, 요청 대기 시간을 미리 정해서, 그 시간안에 응답이 오지 않으면 중지 시킬 수 있다. - AbortController
 // 요청 시작 후, 요청 대기 시간과 재요청 회수를 미리 정해서, 미리 설정한 대기시간보다 재요청 시간이 길어질 경우 중지 시킬 수 있다.
 // 1. 큐처리기를 이용해서 동기, 비동기 함수들의 순서를 강제할 수 있다.
-// - AbortController
+// - AbortController ===================================== TODO: ING
 // - retryAsync
 // - backoff
 // - concurrency 제한 (병렬 개수 제한)
