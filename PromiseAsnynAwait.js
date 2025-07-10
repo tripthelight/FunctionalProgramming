@@ -45,31 +45,31 @@ const urlBad = 'https://dddjsonplaceholder.typicode.com/postss/1';
 
 
 const queue = [];
+let working = false; // 더 이상 사용 안 해도 됨
 let currentController = null;
 let aborted = false;
 
-// 구조 힌트
-let concurrency = 1; // 동시 실행 제한
-let activeCount = 0; // 현재 실행 중인 작업 수
+let concurrency = 1;     // 동시 실행 제한
+let activeCount = 0;     // 현재 실행 중인 작업 수
 
-function initQueue ({ concurrency: c = 1 } = {}) {
+function initQueue({ concurrency: c = 1 } = {}) {
   concurrency = c;
-};
+}
 
-function abortAll () {
+function abortAll() {
   aborted = true;
   queue.length = 0;
   if (currentController) {
     currentController.abort();
   }
-};
+}
 
-function enqueue (taskFn, { retries = 0, backoff = false } = {}) {
+function enqueue(taskFn, { retries = 0, backoff = false } = {}) {
   queue.push({ taskFn, retries, backoff });
   processQueue();
-};
+}
 
-async function processQueue () {
+async function processQueue() {
   if (aborted) return;
   if (activeCount >= concurrency) return;
   if (queue.length === 0) return;
@@ -84,20 +84,20 @@ async function processQueue () {
   try {
     await retryAsync(() => taskFn(signal), retries, backoff);
   } catch (error) {
-    console.error('❌ 전체 재시도 실패 : ', error.message);
-  };
-  
+    console.error("❌ 전체 재시도 실패:", error.message);
+  }
+
   activeCount--;
   currentController = null;
 
   // 다음 대기 중 작업 실행
   if (!aborted) {
     processQueue();
-  };
-};
+  }
+}
 
 // retry + baseoff 조합
-async function retryAsync (fn, retries, backoff) {
+async function retryAsync(fn, retries, backoff) {
   let attempt = 0;
   const baseDelay = 200;
 
@@ -105,25 +105,29 @@ async function retryAsync (fn, retries, backoff) {
     try {
       return await fn();
     } catch (error) {
-      if (error.name === 'AbortError') throw error;
+      if (error.name === "AbortError") throw error;
       if (attempt >= retries) throw error;
       attempt++;
-      const delayTime = backoff ? baseDelay * 2 ** (attempt - 1) : baseDelay;
-      console.warn(`🔁 ${delayTime}ms 대기 후 재시작... ${attempt}/${retries}`);
-      await new Promise(resolve => setTimeout(resolve, delayTime));
+
+      const delayTime = backoff
+        ? baseDelay * 2 ** (attempt - 1)
+        : baseDelay;
+
+      console.warn(`🔁 ${delayTime}ms 후 재시도 (${attempt}/${retries})`);
+      await new Promise((resolve) => setTimeout(resolve, delayTime));
     }
   }
-};
+}
 
 // 사용 예시
-initQueue({ concurrency: 2 });
+initQueue({ concurrency: 2 }); // 최대 2개 동시 실행
 
 function createTask(id, failTimes = 0) {
   let attempts = 0;
   return async (signal) => {
     return new Promise((resolve, reject) => {
-      signal.addEventListener('abort', () => {
-        console.warn(`🛑 작업 ${id} 중단됨`);
+      signal.addEventListener("abort", () => {
+        console.log(`🛑 작업 ${id} 중단됨`);
         resolve();
       });
 
@@ -132,24 +136,23 @@ function createTask(id, failTimes = 0) {
         console.log(`😵 작업 ${id} 실패`);
         reject(new Error(`작업 ${id} 실패`));
         return;
-      };
+      }
 
       setTimeout(() => {
         console.log(`✅ 작업 ${id} 성공`);
         resolve();
-      }, 400);
+      }, 500);
     });
   };
-};
+}
 
-enqueue(createTask('A', 1), { retries: 3, backoff: true }); // 작업 A
-enqueue(createTask('B', 0), { retries: 1 }); // 작업 B
-enqueue(createTask('C', 2), { retries: 3 }); // 작업 C → A, B 실행 중이면 C는 대기
-enqueue(createTask('D', 0)); // 작업 D
+enqueue(createTask("A", 1), { retries: 3, backoff: true }); // 작업 A
+enqueue(createTask("B", 0), { retries: 1 }); // 작업 B
+enqueue(createTask("C", 2), { retries: 3 }); // 작업 C → A, B 실행 중이면 C는 대기
+enqueue(createTask("D", 0)); // 작업 D
 
 // 요약 : 구현 목표
 // - initQueue({ concurrency }) 로 최대 동시 실행 개수 설정
 // - activeCount 를 관리하여 동시 실행 수 추적
 // - 실행이 끝나면 activeCount-- 후 다음 작업 호출
-
 
