@@ -84,7 +84,7 @@ async function processQueue () {
   try {
     await retryAsync(() => taskFn(signal), retries, backoff);
   } catch (error) {
-    console.error('요청 실패 : ', error.message);
+    console.error('❌ 전체 재시도 실패 : ', error.message);
   };
   
   activeCount--;
