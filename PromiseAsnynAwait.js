@@ -24,3 +24,49 @@ const urlBad = 'https://dddjsonplaceholder.typicode.com/postss/1';
 
 // console.log(`요청 결과:\n ${JSON.stringify(result, null, 2).replace(/\\n/g, '\n')}`);
 
+
+/**
+ * 문제 : 대기 중인 작업을 개별적으로 취소할 수 있는 기능을 구현하라
+ */
+// 요구사항
+// 1. cancelTask(id) 메서드를 추가한다.
+// 2. 대기 중인(queue 안에 있는) 작업만 취소할 수 있어야 한다.
+// 3. 취소된 작업은 실행되지 않고 제거한다.
+// 4. cancelTask(id) 호출 시 true/false 로 성공 여부를 반환한다.
+// 5. 필요하다면 onError() 를 호출할 수도 있다.
+
+// 사용 예시
+/*
+const idA = queue.enqueue(async () => {
+  await new Promise(r => setTimeout(r, 1000));
+  console.log('✅ A 완료');
+});
+
+const idB = queue.enqueue(async () => {
+  await new Promise(r => setTimeout(r, 1000));
+  console.log('✅ B 완료');
+});
+
+queue.cancelTask(idB) // B 작업은 실행되지 않음
+*/
+
+// 출력 예상
+// ✅ A 완료
+
+// 구현 포인트
+// - enqueue() 가 반환하는 id로 작업을 추적
+// - this.queue에서 해당 id를 가진 작업을 찾아서 제거
+// - this.totalTasks 도 함께 감소
+// - onError() 콜백 호출 여부는 옵션
+
+// 구현 항목 요약
+// - cancelTask(id) 메서드 구현
+// - queue에서 해당 작업 제거
+// - 제거되었으면 true, 없으면 false 반환
+// - 필요시 onError() 를 "취소됨" 에러로 호출
+
+
+
+
+
+
