@@ -68,5 +68,347 @@ queue.cancelTask(idB) // B 작업은 실행되지 않음
 
 
 
+class TaskQueue {
+  constructor({ concurrency = 1 }={}) {
+    this.queue = [];
 
+    this.aborted = false;
+    this.currentControllers = new Set();
 
+    this.activeCount = 0;
+    this.concurrency = concurrency;
+
+    this.idleCallbacks = [];
+
+    this.totalTasks = 0;
+    this.completedTasks = 0;
+    this.progressCallbacks = [];
+
+    this.taskIdCounter = 0;
+
+    this.paused = false;
+  };
+
+  enqueue(taskFn, {
+    retries = 0,
+    backoff = false,
+    timeout = 0,
+    timeoutRetry = true,
+    onSucess = () => {},
+    onError = () => {},
+    priority = 0
+  }={}) {
+    const id = ++this.taskIdCounter;
+    const task = {
+      id,
+      taskFn,
+      retries,
+      backoff,
+      timeout,
+      timeoutRetry,
+      onSucess,
+      onError,
+      priority
+    };
+    this.queue.push(task);
+    this.queue.sort((a, b) => b.priority - a.priority);
+    this.totalTasks++;
+    this.#processQueue();
+    return id;
+  };
+
+  async #processQueue() {
+    if (this.paused) return;
+    if (this.aborted) return;
+    if (this.activeCount >= this.concurrency) return;
+    if (this.queue.length === 0) return;
+
+    const {
+      taskFn,
+      retries,
+      backoff,
+      timeout,
+      timeoutRetry,
+      onSucess,
+      onError
+    } = this.queue.shift();
+
+    const controller = new AbortController();
+    const signal = controller.signal;
+    this.activeCount++;
+    this.currentControllers.add(controller);
+
+    try {
+      const result = await this.#retryAsync(
+        () => this.#wrapWithTimeout(() => taskFn(signal), timeout),
+        retries,
+        backoff,
+        timeoutRetry
+      );
+      onSucess(result);
+    } catch (error) {
+      onError(error);
+    };
+
+    this.activeCount--;
+    this.currentControllers.delete(controller);
+
+    this.completedTasks++;
+    this.#emitProgress();
+
+    this.#processQueue();
+    this.#checkIdle();
+  };
+
+  #wrapWithTimeout(fn, timeout) {
+    if (timeout === undefined) return fn();
+
+    return Promise.race([
+      fn(),
+      new Promise((_, reject) => {
+        setTimeout(() => {
+          const err = new Error(`💥 타임아웃 발생`);
+          err.name = 'TimeoutError';
+          reject(err);
+        }, timeout);
+      })
+    ]);
+  };
+
+  async #retryAsync(fn, retries, backoff, timeoutRetry) {
+    let attempt = 0;
+    const baseDelay = 200;
+    while (true) {
+      try {
+        return await fn();
+      } catch (error) {
+        if (error.name === 'AbortError') throw error;
+        if (error.name === 'TimeoutError' && !timeoutRetry) throw error;
+        if (attempt >= retries) throw error;
+        attempt++;
+        const delay = backoff ? baseDelay * 2 ** (attempt - 1) : baseDelay;
+        console.warn(`⏰ ${delay}ms 후 재시도 (${attempt}/${retries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      };
+    };
+  };
+
+  abortAll() {
+    this.aborted = true;
+    this.queue.length = 0;
+    for (const controller of this.currentControllers) {
+      controller.abort();
+    };
+    this.currentControllers.clear();
+  };
+
+  onIdle(callback) {
+    this.idleCallbacks.push(callback);
+    this.#checkIdle();
+  };
+
+  #checkIdle() {
+    if (this.queue.length === 0 && this.activeCount === 0) {
+      while (this.idleCallbacks.length > 0) {
+        const cb = this.idleCallbacks.shift();
+        cb();
+      };
+    };
+  };
+
+  onProgress(callback) {
+    this.progressCallbacks.push(callback);
+  };
+
+  #emitProgress() {
+    const total = this.totalTasks;
+    const completed = this.completedTasks;
+    const progress = total === 0 ? 1 : completed / total;
+    for (const cb of this.progressCallbacks) {
+      cb({ total, completed, progress });
+    };
+  };
+
+  changePriority(taskId, newPriority) {
+    const task = this.queue.find(t => t.id === taskId);
+    if (!task) {
+      console.warn(`🚧 작업 ID ${taskId}는 대기중인 작업이 아닙니다.`);
+      return false;
+    };
+    task.priority = newPriority;
+    this.queue.sort((a, b) => b.priority - a.priority);
+    console.warn(`🔄 작업 ID ${taskId}의 우선순의가 ${newPriority}(으)로 변경되었습니다.`);
+    return true;
+  };
+
+  pause() {
+    console.warn(`🔒 전체 작업 중지`);
+    this.paused = true;
+  };
+  resume() {
+    if (this.paused) {
+      console.warn(`🔓🔑 전체 작업 재개`);
+      this.paused = false;
+      this.#processQueue();
+    };
+  };
+  get isPaused() {
+    return this.paused;
+  };
+
+  cancelTask(taskId, { emitError = true }={}) {
+    const index = this.queue.findIndex(t => t.id === taskId);
+    if (index === -1) {
+      console.warn(`🚫 작업 ID ${taskId}는 대기중이 아니어서 취소할 수 없습니다.`);
+      return false;
+    };
+
+    const [removedTask] = this.queue.splice(index, 1);
+    this.totalTasks--;
+
+    if (emitError) {
+      const cancelError = new Error(`📦 작업 ID ${taskId}가 취소되었습니다.`);
+      cancelError.name = 'CanceledError';
+      removedTask.onError(cancelError);
+    };
+
+    console.warn(`📦 작업 ID ${taskId}가 취소됨`);
+    return true;
+  };
+};
+
+function createTask (id, failTimes = 0) {
+  console.log(`👠 작업 ${id} 시작됨`);
+  let attempts = 0;
+  return async (signal) => {
+    return new Promise((resolve, reject) => {
+      if (signal.aborted) {
+        const err = new Error(`🛑 작업 ${id} 중단됨`);
+        err.name = 'AbortError';
+        reject(err);
+      };
+
+      signal.addEventListener('abort', () => {
+        const err = new Error(`🛑 작업 ${id} 중단됨`);
+        err.name = 'AbortError';
+        reject(err);
+      });
+
+      if (attempts < failTimes) {
+        attempts++;
+        reject(new Error(`❌ 작업 ${id} 실패`));
+        return;
+      };
+
+      setTimeout(() => {
+        resolve(`✅ 작업 ${id} 성공`);
+      }, 3000);
+    });
+  };
+};
+
+const q = new TaskQueue({ concurrency: 2 });
+
+q.onProgress(({ total, completed, progress }) => {
+  console.log(`${completed}/${total} (${Math.round(progress * 100)}%)`);
+});
+
+const idA = q.enqueue(createTask('A', 2), {
+  retries: 3,
+  backoff: true,
+  timeout: 100 * 99,
+  timeoutRetry: false,
+  onSucess: (res) => {
+    console.log('📌 작업 A 성공 → ', res);
+  },
+  onError: (err) => {
+    if (err.name === 'AbortError') {
+      console.warn('📌 작업 A 중단 → ', err.message);
+    } else if (err.name === 'TimeoutError') {
+      console.warn('📌 작업 A 타임아웃 → ', err.message);
+    } else if (err.name === 'CanceledError') {
+      console.warn('📌 작업 A 취소 → ', err.message);
+    } else {
+      console.error('📌 작업 A 실패 → ', err.message);
+    };
+  },
+  priority: 1
+});
+
+const idB = q.enqueue(createTask('B', 2), {
+  retries: 3,
+  backoff: true,
+  timeout: 100 * 99,
+  timeoutRetry: false,
+  onSucess: (res) => {
+    console.log('📌 작업 B 성공 → ', res);
+  },
+  onError: (err) => {
+    if (err.name === 'AbortError') {
+      console.warn('📌 작업 B 중단 → ', err.message);
+    } else if (err.name === 'TimeoutError') {
+      console.warn('📌 작업 B 타임아웃 → ', err.message);
+    } else if (err.name === 'CanceledError') {
+      console.warn('📌 작업 B 취소 → ', err.message);
+    } else {
+      console.error('📌 작업 B 실패 → ', err.message);
+    };
+  },
+  priority: 10
+});
+
+const idC = q.enqueue(createTask('C', 2), {
+  retries: 3,
+  backoff: true,
+  timeout: 100 * 99,
+  timeoutRetry: false,
+  onSucess: (res) => {
+    console.log('📌 작업 C 성공 → ', res);
+  },
+  onError: (err) => {
+    if (err.name === 'AbortError') {
+      console.warn('📌 작업 C 중단 → ', err.message);
+    } else if (err.name === 'TimeoutError') {
+      console.warn('📌 작업 C 타임아웃 → ', err.message);
+    } else if (err.name === 'CanceledError') {
+      console.warn('📌 작업 C 취소 → ', err.message);
+    } else {
+      console.error('📌 작업 C 실패 → ', err.message);
+    };
+  },
+  priority: 5
+});
+
+const idD = q.enqueue(createTask('D', 2), {
+  retries: 3,
+  backoff: true,
+  timeout: 100 * 99,
+  timeoutRetry: false,
+  onSucess: (res) => {
+    console.log('📌 작업 D 성공 → ', res);
+  },
+  onError: (err) => {
+    if (err.name === 'AbortError') {
+      console.warn('📌 작업 D 중단 → ', err.message);
+    } else if (err.name === 'TimeoutError') {
+      console.warn('📌 작업 D 타임아웃 → ', err.message);
+    } else if (err.name === 'CanceledError') {
+      console.warn('📌 작업 D 취소 → ', err.message);
+    } else {
+      console.error('📌 작업 D 실패 → ', err.message);
+    };
+  },
+  priority: 10
+});
+
+q.cancelTask(idC, { emitError: true });
+q.cancelTask(idD, { emitError: false });
+
+q.pause();
+setTimeout(() => { if (q.isPaused) { q.resume(); }; }, 3000);
+
+setTimeout(() => { q.changePriority(idD, 100); }, 100);
+
+// setTimeout(() => q.abortAll(), 100 * 40);
+
+q.onIdle(() => { console.log('🟢 모든 작업 완료됨'); });
