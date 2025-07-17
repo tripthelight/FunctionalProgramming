@@ -161,10 +161,22 @@ class TaskQueue {
       );
       onSucess(result);
     } catch (error) {
-      onError(error);
-      if (error.name !== 'AbortError' && typeof fallback === 'function') {
-        fallback(error);
-      };
+      if (
+        error.name !== 'AbortError' &&
+        error.name !== 'TimeoutError' &&
+        typeof fallback === 'function'
+      ) {
+        try {
+          const fallbackResult = await fallback();  // ✅ fallback은 Promise임
+          onSucess(fallbackResult);                 // ✅ 정상처럼 처리
+        } catch (fallbackError) {
+          // fallback도 실패했을 경우에만 onError 호출
+          onError(fallbackError);
+        }
+      } else {
+        // AbortError이거나 fallback이 없으면 원래 에러 전달
+        onError(error);
+      }
     };
 
     this.activeCount--;
@@ -352,18 +364,21 @@ function createTask (id, failTimes = 0) {
 
 const q = new TaskQueue({ concurrency: 2 });
 
-
 q.onProgress(({ total, completed, progress }) => {
   console.log(`${completed}/${total} (${Math.round(progress * 100)}%)`);
 });
 
-const idA = q.enqueue(createTask('A', 2), {
+const idA = q.enqueue(createTask('A', 4), {
   retries: 3,
   backoff: true,
   timeout: 100 * 99,
   timeoutRetry: false,
   onSucess: (res) => {
-    console.log('🚩 작업 A 성공 → ', res);
+    if (res.defaultData) {
+      console.warn('🚩 작업 A 최종 실패 후 대체 DATA → ', res.defaultData);
+    } else {
+      console.log('🚩 작업 A 성공 → ', res);
+    }
   },
   onError: (err) => {
     if (err.name === 'AbortError') {
@@ -376,7 +391,10 @@ const idA = q.enqueue(createTask('A', 2), {
       console.error('🚩 작업 A 실패 → ', err.message);
     };
   },
-  fallback: () => { console.log('fallback A'); },
+  fallback: () => {
+    console.log('fallback A ');
+    return { defaultData: true }
+  },
   priority: 5
 });
 
@@ -386,7 +404,11 @@ const idB = q.enqueue(createTask('B', 2), {
   timeout: 100 * 99,
   timeoutRetry: false,
   onSucess: (res) => {
-    console.log('🚩 작업 B 성공 → ', res);
+    if (res.defaultData) {
+      console.warn('🚩 작업 B 최종 실패 후 대체 DATA → ', res.defaultData);
+    } else {
+      console.log('🚩 작업 B 성공 → ', res);
+    }
   },
   onError: (err) => {
     if (err.name === 'AbortError') {
@@ -399,7 +421,10 @@ const idB = q.enqueue(createTask('B', 2), {
       console.error('🚩 작업 B 실패 → ', err.message);
     };
   },
-  fallback: () => { console.log('fallback B'); },
+  fallback: () => {
+    console.log('fallback B ');
+    return { defaultData: true }
+  },
   priority: 10
 });
 
@@ -409,7 +434,11 @@ const idC = q.enqueue(createTask('C', 2), {
   timeout: 100 * 99,
   timeoutRetry: false,
   onSucess: (res) => {
-    console.log('🚩 작업 C 성공 → ', res);
+    if (res.defaultData) {
+      console.warn('🚩 작업 C 최종 실패 후 대체 DATA → ', res.defaultData);
+    } else {
+      console.log('🚩 작업 C 성공 → ', res);
+    }
   },
   onError: (err) => {
     if (err.name === 'AbortError') {
@@ -422,7 +451,10 @@ const idC = q.enqueue(createTask('C', 2), {
       console.error('🚩 작업 C 실패 → ', err.message);
     };
   },
-  fallback: () => { console.log('fallback C'); },
+  fallback: () => {
+    console.log('fallback C ');
+    return { defaultData: true }
+  },
   priority: 1
 });
 
@@ -432,7 +464,11 @@ const idD = q.enqueue(createTask('D', 2), {
   timeout: 100 * 99,
   timeoutRetry: false,
   onSucess: (res) => {
-    console.log('🚩 작업 D 성공 → ', res);
+    if (res.defaultData) {
+      console.warn('🚩 작업 D 최종 실패 후 대체 DATA → ', res.defaultData);
+    } else {
+      console.log('🚩 작업 D 성공 → ', res);
+    }
   },
   onError: (err) => {
     if (err.name === 'AbortError') {
@@ -445,7 +481,10 @@ const idD = q.enqueue(createTask('D', 2), {
       console.error('🚩 작업 D 실패 → ', err.message);
     };
   },
-  fallback: () => { console.log('fallback D'); },
+  fallback: () => {
+    console.log('fallback D ');
+    return { defaultData: true }
+  },
   priority: 10
 });
 
@@ -466,20 +505,10 @@ q.onIdle(() => { console.log('🟢 모든 작업 완료됨'); });
 q.done().then(() => { console.log('🎉 모든 작업 done'); });
 
 
-/*
-q.enqueue(async () => {
-  await new Promise(res => setTimeout(res, 500));
-  console.log("✅ A 완료");
-});
 
-q.enqueue(async () => {
-  await new Promise(res => setTimeout(res, 100));
-  console.log("✅ B 완료");
-});
 
-q.done().then(() => {
-  console.log("🎉 모든 작업 완료!");
-});
-*/
+
+
+
 
 
