@@ -24,8 +24,94 @@ const urlBad = 'https://dddjsonplaceholder.typicode.com/postss/1';
 
 // console.log(`요청 결과:\n ${JSON.stringify(result, null, 2).replace(/\\n/g, '\n')}`);
 
+/**
+ * 문제 정의
+  - 1. Semaphore 클래스를 구현하라.
+  - 2. acquire() : 자원을 점유하려는 요청. 자원이 없으면 대기 해야 함.
+  - 3. release() : 자원을 반환. 대기 중인 요청이 있으면 그 중 하나를 실행
+  - 4. 동시에 실행 가능한 작업 수 (limit) 를 설정할 수 있어야 함.
+  - 5. 모든 작업이 완료되면, .done 이 동작해야 한다.
+ */
 
 
+  
+
+class Semaphore {
+  constructor(limit = 1) {
+    this.limit = limit;
+    this.activeCount = 0;
+    this.queue = [];
+    this.doneResolvers = [];
+  };
+
+  // 자원 점유
+  acquire() {
+    return new Promise((resolve) => {
+      console.log('------- ', this.activeCount);
+      
+      if (this.activeCount < this.limit) {
+        this.activeCount++;
+        resolve();
+      } else {
+        this.queue.push(resolve);
+      };
+    })
+  };
+
+  // 자원 해제
+  release() {
+    this.activeCount--;
+    if (this.queue.length > 0) {
+      const next = this.queue.shift();
+      this.activeCount++;
+      next(); // 대기중인 작업 실행
+    } else if (this.activeCount === 0) {
+      // 모든 작업이 끝났다면 done() 콜백 실행
+      while (this.doneResolvers.length > 0) {
+        this.doneResolvers.shift()();
+      };
+    };
+  };
+
+  // 모든 작업 완료 대기
+  done() {
+    return new Promise((resolve) => {
+      if (this.activeCount === 0 && this.queue.length === 0) {
+        resolve();
+      } else {
+        this.doneResolvers.push(resolve);
+      };
+    });
+  };
+};
+
+const sem = new Semaphore(2); // 동시에 2개반 실행 가능
+
+async function task (name, delay) {
+  await sem.acquire(); // 자원 점유
+  console.log(`${name} 시작`);
+  await new Promise(res => setTimeout(res, delay));
+  console.log(`${name} 완료`);
+  sem.release(); // 자원 반환
+};
+
+task('A', 1000);
+task('B', 500);
+task('C', 300);
+task('D', 400);
+
+sem.done().then(() => console.log('모든 작업 완료!'));
+
+// 예상 실행 순서
+// A 시작
+// B 시작
+// B 완료
+// C 시작
+// A 완료
+// D 시작
+// C 완료
+// D 완료
+// 모든 작업 완료!
 
 
 
